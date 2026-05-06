@@ -15,9 +15,9 @@ The runtime pipeline is still intentionally direct:
 
 ```text
 Click command -> workflow -> DiskScanner -> FileAnalyzer -> Rich UI
-                                 |
-                                 v
-                          ActionExecutor
+                         |          \-> DuplicateDetector -> Rich UI
+                         v
+                  ActionExecutor
 ```
 
 The architectural goal is separation of concerns without adding heavy
@@ -42,6 +42,8 @@ Coordinates command behavior:
 
 - Resolves the scan path, defaulting to `Path.home()`.
 - Creates `DiskScanner`, `FileAnalyzer`, and `ActionExecutor` instances.
+- Creates `DuplicateDetector` for `full-report` unless duplicate checks are
+  disabled.
 - Sequences scan, analysis, preview, confirmation, and execution steps.
 - Keeps destructive operations behind confirmation unless dry-run mode is
   active.
@@ -115,8 +117,25 @@ Primary responsibilities:
   `age_category`, and display-ready `accessed` datetime.
 - Summarize total size, file count, average file size, and top extensions.
 - Calculate potential space savings for cache deletion and old-file archiving.
+- Include exact duplicate reclaimable bytes in potential savings when supplied.
 
 Performance-oriented constants are prepared at import time.
+
+### `src/disk_space_manager/duplicates.py`
+
+Contains `DuplicateDetector`, which operates on scanner file dictionaries.
+
+Primary responsibilities:
+
+- Group exact duplicates by size and streamed SHA-256 digest.
+- Build capped offline near-duplicate fingerprints for text, images, videos,
+  and audio.
+- Bucket fingerprints before pair comparisons to avoid a global all-pairs scan.
+- Return report dictionaries with duplicate groups, reclaimable or reviewable
+  bytes, and skip counts.
+
+This module is read-only and best-effort. Decode failures, unsupported formats,
+and over-cap files are skipped rather than failing the report.
 
 ### `src/disk_space_manager/executor.py`
 
@@ -165,6 +184,8 @@ Contains repository-wide constants:
 - Cache-like file extensions.
 - System and user-home scan exclusions.
 - Minimum file size for archive candidates.
+- Duplicate display limits, per-format near-duplicate caps, sampling counts,
+  and similarity thresholds.
 - Action log path.
 
 Changes here can materially affect safety, scan scope, and user trust, so pair
@@ -216,7 +237,11 @@ This command is read-only.
 2. Scan with detailed progress and ETA estimation.
 3. Find cache candidates with progress.
 4. Find old-file candidates with progress.
-5. Render usage, largest paths, cache, old-file, and savings sections.
+5. Find exact duplicate groups unless `--no-duplicates` is set.
+6. Find near-duplicate groups unless `--no-duplicates` or
+   `--no-near-duplicates` is set.
+7. Render usage, largest paths, cache, old-file, duplicate, and savings
+   sections.
 
 This command is read-only.
 
@@ -225,7 +250,7 @@ This command is read-only.
 The test suite uses pytest and Click's `CliRunner`. It covers archive behavior,
 target precedence, archive target exclusions, repeated archive runs, direct
 executor behavior, Linux drive detection, scanner and analyzer progress,
-`full-report` smoke coverage, and profiling helper safety.
+duplicate detection, `full-report` smoke coverage, and profiling helper safety.
 
 `scripts/profile_report_generation.py` is the performance harness. It owns and
 recreates `downloads/benchmark`, generates deterministic sparse-file datasets,
@@ -241,6 +266,7 @@ When adding features:
 - Add terminal output and prompts in `ui.py`.
 - Keep filesystem traversal concerns in `scanner.py`.
 - Put classification and summary logic in `analyzer.py`.
+- Put exact and near-duplicate matching logic in `duplicates.py`.
 - Put file mutations only in `executor.py`.
 - Put archive destination rules in `archive_targets.py`.
 - Put external-drive discovery in `drive_detector.py`.

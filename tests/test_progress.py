@@ -397,3 +397,36 @@ class TestFullReportCommand:
         runner = CliRunner()
         result = runner.invoke(cli, ["full-report", "--path", str(tmp_path)])
         assert result.exit_code == 0, f"Command failed: {result.output}\n{result.exception}"
+
+    def test_duplicate_sections_are_shown_by_default(self, tmp_path):
+        (tmp_path / "first.txt").write_text("same duplicate content")
+        (tmp_path / "second.txt").write_text("same duplicate content")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["full-report", "--path", str(tmp_path)])
+        assert result.exit_code == 0, f"Command failed: {result.output}\n{result.exception}"
+        assert "Exact Duplicate Files" in result.output
+        assert "Near Duplicate Files" in result.output
+
+    def test_no_duplicates_hides_duplicate_sections(self, tmp_path):
+        (tmp_path / "first.txt").write_text("same duplicate content")
+        (tmp_path / "second.txt").write_text("same duplicate content")
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["full-report", "--path", str(tmp_path), "--no-duplicates"],
+        )
+        assert result.exit_code == 0, f"Command failed: {result.output}\n{result.exception}"
+        assert "Exact Duplicate Files" not in result.output
+        assert "Near Duplicate Files" not in result.output
+
+    def test_no_near_duplicates_keeps_exact_section_only(self, tmp_path):
+        (tmp_path / "first.txt").write_text("same duplicate content")
+        (tmp_path / "second.txt").write_text("same duplicate content")
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["full-report", "--path", str(tmp_path), "--no-near-duplicates"],
+        )
+        assert result.exit_code == 0, f"Command failed: {result.output}\n{result.exception}"
+        assert "Exact Duplicate Files" in result.output
+        assert "Near Duplicate Files" not in result.output

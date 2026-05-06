@@ -16,6 +16,8 @@ confirmation before changing files, and record action logs.
   be reviewed and removed.
 - **Old File Archiving**: Find files not accessed in 6+ months and archive them
   to an external drive or local folder.
+- **Duplicate Detection**: Report exact duplicate files and advisory
+  near-duplicates for text, images, videos, and audio during full reports.
 - **High Performance**: Handles large trees efficiently using `os.scandir`,
   parallel scanning, and optimized analysis.
 - **Safety First**: Requires explicit confirmation before destructive actions.
@@ -119,6 +121,14 @@ Generate a comprehensive read-only report:
 uv run disk-space-manager full-report
 ```
 
+Duplicate and near-duplicate checks run by default. Skip both duplicate phases,
+or keep exact duplicates while skipping slower near-duplicate checks:
+
+```bash
+uv run disk-space-manager full-report --no-duplicates
+uv run disk-space-manager full-report --no-near-duplicates
+```
+
 ### Dry Run Mode
 
 Preview mutating operations without changing files:
@@ -142,6 +152,9 @@ uv run disk-space-manager --dry-run archive
 - `--external-path PATH` - Mounted external drive path (default:
   auto-detect).
 - `--age-months N` - Age threshold in months (default: 6).
+- `--no-duplicates` - Skip exact and near-duplicate checks for `full-report`.
+- `--no-near-duplicates` - Skip near-duplicate checks but keep exact duplicate
+  checks for `full-report`.
 - `--dry-run` - Show what would be done without making changes.
 
 ## Safety Features
@@ -185,6 +198,20 @@ Files are considered old if they:
 - Have not been accessed in the specified time period (default: 6 months).
 - Are larger than 1 MB, to avoid moving many small files.
 
+### Duplicate Detection
+
+Full reports include read-only duplicate analysis:
+
+- Exact duplicates are found by grouping same-size files and streaming SHA-256
+  hashes only for candidate groups.
+- Near-duplicate text files use normalized token shingles and SimHash.
+- Near-duplicate images use perceptual hashes through Pillow and ImageHash.
+- Near-duplicate videos use sampled frame perceptual hashes through OpenCV.
+- Near-duplicate audio uses offline waveform and spectral fingerprints through
+  SoundFile and NumPy.
+- Near-duplicate results are advisory and shown separately from the main
+  potential savings total.
+
 ### Archiving Process
 
 When archiving files to an external drive or local folder:
@@ -215,6 +242,8 @@ Default settings live in `src/disk_space_manager/config.py`:
 - `CACHE_DIRECTORY_PATTERNS`: Patterns for cache directories.
 - `CACHE_FILE_EXTENSIONS`: File extensions considered cache-like.
 - `EXCLUDED_DIRECTORIES`: Directories excluded from scanning.
+- `DUPLICATE_*` and `NEAR_DUPLICATE_*`: Duplicate display limits, file-size
+  caps, sampling counts, and similarity thresholds.
 - `ACTION_LOG_FILE`: Action log path.
 
 ## Requirements
@@ -222,6 +251,8 @@ Default settings live in `src/disk_space_manager/config.py`:
 - Python 3.9+
 - macOS or Linux
 - A local folder or mounted external drive for archiving
+- Offline media libraries for duplicate analysis: Pillow, ImageHash,
+  OpenCV headless, SoundFile, and NumPy
 - [uv](https://docs.astral.sh/uv/) for dependency management
 
 ## Action Log
@@ -240,6 +271,7 @@ src/disk_space_manager/ui.py             Rich terminal presentation
 src/disk_space_manager/archive_targets.py Archive target resolution
 src/disk_space_manager/scanner.py        Filesystem scanning
 src/disk_space_manager/analyzer.py       File categorization and estimates
+src/disk_space_manager/duplicates.py     Duplicate and near-duplicate analysis
 src/disk_space_manager/executor.py       File operations and logging
 src/disk_space_manager/drive_detector.py External drive auto-detection
 src/disk_space_manager/config.py         Configuration constants
@@ -256,6 +288,8 @@ agent skills live in `.agents/skills/`, and shared command prompts live in
 
 - Requires appropriate file permissions.
 - Some system files may be inaccessible.
+- Some near-duplicate media formats may be skipped if local decoders cannot
+  read them.
 - External drives must be mounted and writable when using `--external-path` or
   auto-detection.
 - Scanning speed is bounded by filesystem I/O.

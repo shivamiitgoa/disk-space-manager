@@ -8,6 +8,7 @@ from typing import Optional
 
 from .analyzer import FileAnalyzer
 from .archive_targets import ArchiveTargetError, resolve_archive_target
+from .duplicates import DuplicateDetector, empty_duplicate_report
 from .executor import ActionExecutor
 from .scanner import DiskScanner
 from . import ui
@@ -111,7 +112,12 @@ def run_archive(
     ui.show_archive_result(result, target.archive_base, executor)
 
 
-def run_full_report(path: Optional[Path], age_months: int) -> None:
+def run_full_report(
+    path: Optional[Path],
+    age_months: int,
+    include_duplicates: bool = True,
+    include_near_duplicates: bool = True,
+) -> None:
     """Run the full-report command workflow."""
     ui.print_header()
     scan_path = _scan_path_or_home(path)
@@ -119,12 +125,27 @@ def run_full_report(path: Optional[Path], age_months: int) -> None:
 
     scanner = DiskScanner(scan_path)
     analyzer = _analyzer_for_age(age_months)
-    scan_results, cache_files, old_files = ui.run_full_report_progress(
+    duplicate_detector = DuplicateDetector() if include_duplicates else None
+    scan_results, cache_files, old_files, duplicate_report = ui.run_full_report_progress(
         scanner,
         analyzer,
         age_months,
+        duplicate_detector=duplicate_detector,
+        include_near_duplicates=include_near_duplicates,
     )
-    ui.show_full_report(scanner, analyzer, scan_results, cache_files, old_files, age_months)
+    if duplicate_report is None:
+        duplicate_report = empty_duplicate_report()
+    ui.show_full_report(
+        scanner,
+        analyzer,
+        scan_results,
+        cache_files,
+        old_files,
+        age_months,
+        duplicate_report=duplicate_report,
+        include_duplicates=include_duplicates,
+        include_near_duplicates=include_near_duplicates,
+    )
 
 
 def _scan_path_or_home(path: Optional[Path]) -> Path:

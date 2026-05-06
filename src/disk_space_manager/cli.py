@@ -105,6 +105,26 @@ def archive(
     default=DEFAULT_AGE_THRESHOLD_MONTHS,
     help=f"Age threshold in months (default: {DEFAULT_AGE_THRESHOLD_MONTHS})",
 )
-def full_report(path: Optional[Path], age_months: int) -> None:
+@click.option(
+    "--no-duplicates",
+    is_flag=True,
+    help="Skip exact and near-duplicate file detection",
+)
+@click.option(
+    "--no-near-duplicates",
+    is_flag=True,
+    help="Skip slower near-duplicate checks but keep exact duplicate detection",
+)
+def full_report(
+    path: Optional[Path],
+    age_months: int,
+    no_duplicates: bool,
+    no_near_duplicates: bool,
+) -> None:
     """Generate a full analysis report."""
-    workflows.run_full_report(path, age_months)
+    workflows.run_full_report(
+        path,
+        age_months,
+        include_duplicates=not no_duplicates,
+        include_near_duplicates=not no_near_duplicates and not no_duplicates,
+    )

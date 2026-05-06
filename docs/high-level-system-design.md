@@ -27,7 +27,8 @@ The main workflows are:
 - Archive old large files with `archive`, using either a local archive folder,
   a specified external drive path, or auto-detected external storage.
 - Generate a comprehensive read-only report with `full-report`, including scan
-  progress, cache candidates, old-file candidates, and potential savings.
+  progress, cache candidates, old-file candidates, duplicate candidates, and
+  potential savings.
 
 ## System Context
 
@@ -41,6 +42,8 @@ with:
   `/proc/self/mountinfo`.
 - The terminal through Click command parsing and Rich tables, panels, and
   progress indicators.
+- Offline media libraries for duplicate analysis; no external services or APIs
+  are used.
 - A local action log at `~/.disk-space-manager-actions.log`.
 
 ## Major Subsystems
@@ -76,6 +79,14 @@ extensions, and filename markers. It detects old files using access time and a
 minimum size threshold. It also calculates summary statistics and potential
 space savings.
 
+### Duplicate Detector
+
+`src/disk_space_manager/duplicates.py` finds read-only exact duplicates and
+advisory near duplicates for `full-report`. Exact matches use streamed SHA-256
+hashes for same-size candidates. Near matches use capped offline fingerprints
+for text, images, videos, and audio, and skip unsupported or decode-failing
+files without aborting the report.
+
 ### Action Executor
 
 `src/disk_space_manager/executor.py` performs deletion and archive operations.
@@ -108,11 +119,13 @@ The core data flow is:
    `total_scanned`, and `errors`.
 3. `FileAnalyzer` consumes scanned file dictionaries to produce usage
    summaries, cache candidates, old-file candidates, and savings estimates.
-4. `ui.py` renders read-only command results directly.
-5. Mutating workflows show summaries, request confirmation unless in dry-run
+4. `DuplicateDetector` consumes the same scanned file dictionaries during
+   `full-report` to produce exact and near-duplicate groups.
+5. `ui.py` renders read-only command results directly.
+6. Mutating workflows show summaries, request confirmation unless in dry-run
    mode, then call `ActionExecutor`.
-6. `archive_targets.py` resolves archive destinations before archive scans.
-7. `ActionExecutor` records each intended or completed action in memory and in
+7. `archive_targets.py` resolves archive destinations before archive scans.
+8. `ActionExecutor` records each intended or completed action in memory and in
    the action log.
 
 The scanner's file dictionaries are intentionally lightweight. During scanning
@@ -126,6 +139,7 @@ Safety is a top-level system requirement because the tool can delete or move
 user files.
 
 - `analyze` and `full-report` are read-only.
+- Duplicate and near-duplicate sections are advisory report output only.
 - `clean` and `archive` require explicit confirmation before mutating files
   unless the global `--dry-run` flag is used.
 - Dry-run mode does not delete, move, create archive output, or create symlinks,
@@ -157,6 +171,8 @@ The scanner is designed for large filesystem trees. Key choices are:
   subsets.
 - Batch progress events from worker threads to avoid excessive cross-thread
   communication.
+- Duplicate detection hashes only same-size exact candidates and caps
+  near-duplicate fingerprinting by media type to protect report runtime.
 
 The profiling workflow in `scripts/profile_report_generation.py` owns
 `downloads/benchmark`, can generate large sparse benchmark datasets, runs
@@ -165,10 +181,10 @@ The profiling workflow in `scripts/profile_report_generation.py` owns
 ## Operating Boundaries
 
 The system targets Unix-like filesystems on macOS and Linux and assumes Python
-3.9 or newer. It depends on Click and Rich at runtime, pytest for tests, and
-`uv` for the documented development workflow. External-drive auto-detection is
-best-effort and can always be bypassed with `--target-path` or
-`--external-path`.
+3.9 or newer. It depends on Click and Rich for CLI behavior, offline media
+libraries for duplicate analysis, pytest for tests, and `uv` for the documented
+development workflow. External-drive auto-detection is best-effort and can
+always be bypassed with `--target-path` or `--external-path`.
 
 The tool does not guarantee it can inspect every file. Filesystem permissions,
 system protections, broken symlinks, unmounted drives, and concurrent file

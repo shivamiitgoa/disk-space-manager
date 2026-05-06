@@ -10,6 +10,9 @@ Runtime requirements:
 - Python 3.9 or newer.
 - Click for CLI parsing.
 - Rich for terminal output.
+- Pillow and ImageHash for offline image perceptual hashing.
+- OpenCV headless for offline video frame sampling.
+- SoundFile and NumPy for offline audio fingerprinting.
 - Unix-like filesystem semantics, including symlink support.
 - macOS `diskutil` or `/Volumes` for macOS external-drive auto-detection.
 - Linux `/proc/self/mountinfo` for Linux external-drive auto-detection.
@@ -95,14 +98,23 @@ Options:
 
 - `--path PATH`: directory to scan; defaults to the user's home directory.
 - `--age-months N`: old-file threshold in months; defaults to 6.
+- `--no-duplicates`: skip exact and near-duplicate detection.
+- `--no-near-duplicates`: keep exact duplicate detection but skip
+  near-duplicate detection.
 
 Behavior:
 
 - Scans the selected path with detailed progress and ETA estimation.
 - Finds cache candidates.
 - Finds old-file candidates.
+- Finds exact duplicate candidates by hashing same-size files.
+- Finds near-duplicate candidates for supported text, image, video, and audio
+  formats unless disabled.
 - Displays disk usage, top extensions, largest directories, largest files,
-  cache summary, old-file summary, and total potential savings.
+  cache summary, old-file summary, duplicate summaries, and total potential
+  savings.
+- Includes exact duplicate reclaimable bytes in total potential savings.
+- Reports near-duplicate bytes separately as review-only advisory data.
 - Does not delete, move, or write user-file changes.
 
 ## Scan Specification
@@ -162,7 +174,26 @@ Each old-file result includes:
 Old-file results are sorted by size descending.
 
 Potential savings are reported separately for cache candidates and old-file
-candidates, then combined.
+candidates. Exact duplicate reclaimable bytes are included when available, and
+then the total is combined. Near-duplicate bytes are not included in total
+savings because they require manual review.
+
+Exact duplicate candidates must:
+
+- Have positive size.
+- Share a file size with at least one other scanned file.
+- Match by streamed SHA-256 digest.
+
+Near-duplicate detection is best-effort and capped by configured per-format
+size limits. Supported fingerprints include:
+
+- Text: normalized token shingles with SimHash.
+- Images: perceptual hashes.
+- Videos: sampled frame perceptual hashes with duration tolerance.
+- Audio: compact waveform and spectral fingerprints with duration tolerance.
+
+Unsupported, too-large, unreadable, or decode-failing files are skipped without
+failing `full-report`.
 
 ## External Drive Detection Specification
 
@@ -226,6 +257,7 @@ Logging behavior:
 - Archive logic must preserve symlink behavior at original file locations.
 - Previously archived output under an archive target inside the scan path must
   not be re-archived.
+- Duplicate and near-duplicate detection must remain report-only.
 
 ## Tested Invariants
 
@@ -250,6 +282,10 @@ The current test suite covers these behavioral invariants:
 - Progress callbacks do not alter analysis results.
 - `full-report` runs against empty, nested, cache-containing, and larger test
   directories.
+- Exact duplicates are grouped by content, not only by size.
+- Near-duplicate text, image, audio, and mocked video fingerprints are covered.
+- `full-report --no-duplicates` and `--no-near-duplicates` control duplicate
+  report sections.
 - Profiling helper cleanup is safe and rejects unsafe benchmark paths.
 
 ## Verification

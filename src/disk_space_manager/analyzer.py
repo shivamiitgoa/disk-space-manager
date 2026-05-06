@@ -171,11 +171,17 @@ class FileAnalyzer:
             'average_file_size': total_size / file_count if file_count > 0 else 0,
         }
     
-    def calculate_potential_savings(self, cache_files: List[Dict], old_files: List[Dict]) -> Dict:
+    def calculate_potential_savings(
+        self,
+        cache_files: List[Dict],
+        old_files: List[Dict],
+        exact_duplicate_reclaimable_size: int = 0,
+        exact_duplicate_file_count: int = 0,
+    ) -> Dict:
         """Calculate potential disk space savings."""
         cache_size = sum(f['size'] for f in cache_files)
         old_files_size = sum(f['size'] for f in old_files)
-        total_savings = cache_size + old_files_size
+        total_savings = cache_size + old_files_size + exact_duplicate_reclaimable_size
         
         return {
             'cache_size': cache_size,
@@ -184,6 +190,11 @@ class FileAnalyzer:
             'old_files_size': old_files_size,
             'old_files_size_formatted': format_size(old_files_size),
             'old_files_count': len(old_files),
+            'exact_duplicate_reclaimable_size': exact_duplicate_reclaimable_size,
+            'exact_duplicate_reclaimable_size_formatted': format_size(
+                exact_duplicate_reclaimable_size
+            ),
+            'exact_duplicate_file_count': exact_duplicate_file_count,
             'total_savings': total_savings,
             'total_savings_formatted': format_size(total_savings),
         }
